@@ -226,6 +226,8 @@ class VisualGraph:
 
         # BFS search
         animations = {}
+        timing_animation = {}
+        timing_animation[start] = None
         vertices = [start, ]
         while vertices:
             for vertex in vertices:
@@ -242,10 +244,11 @@ class VisualGraph:
                 )
                 for key in success_anims:
                     base_anims = animations.get(key, [])
-                    timing_anims = None if key == start else animations.get(predecessor_map[key], [])
+                    timing_animation[key] = success_anims[key][0]
+                    wait_for = timing_animation[vertex]
                     animations[key] = (
                         base_anims + [
-                            after_animation_separate(anim, timing_anims[0]) if timing_anims else anim
+                            after_animation_separate(anim, wait_for) if wait_for else anim
                             for anim in success_anims[key]
                         ]
                     )
@@ -255,7 +258,7 @@ class VisualGraph:
                         [
                             neighbour
                             for neighbour in self.neighbours(vertex)
-                            if neighbour not in children[vertex]
+                            if neighbour not in children[vertex] and vertex not in children[neighbour] # Make sure we don't back propogate.
                         ],
                         edge_color,
                         at_once=at_once,
@@ -265,10 +268,11 @@ class VisualGraph:
                     )
                     for key in failure_anims:
                         base_anims = animations.get(key, [])
-                        timing_anims = None if key == start else animations.get(predecessor_map[key], [])
+                        wait_for = timing_animation[vertex]
+                        print(key, 'waits for', wait_for)
                         animations[key] = (
                             base_anims + [
-                                after_animation_separate(anim, timing_anims[0]) if timing_anims else anim
+                                after_animation_separate(anim, wait_for) if wait_for else anim
                                 for anim in failure_anims[key]
                             ]
                         )
