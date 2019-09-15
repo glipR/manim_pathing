@@ -76,7 +76,7 @@ class Edge:
         new_weight.next_to(self.midpoint, self.normal)
         return Transform(self.weight_text, new_weight)
 
-    def change_color(self, color, from_v=None, from_color=None, anim=False) -> Animation:
+    def change_color(self, color, from_v=None, from_color=None, anim=False, class_mode=False, **kwargs) -> Animation:
         if not anim:
             if self.tmp_lines:
                 return self.tmp_lines[-1].set_color(color)
@@ -90,7 +90,9 @@ class Edge:
                 original = self.tmp_lines[-1]
             self.tmp_lines.append(original.copy())
             self.tmp_lines[-1].set_color(color)
-            animation = Transform(original, self.tmp_lines[-1])
+            animation = Transform(original, self.tmp_lines[-1], **kwargs)
+            if class_mode:
+                return SuccessiveTransform, [self.tmp_lines[-2], self.tmp_lines[-1]], kwargs
         else:
             if from_v == self.v1:
                 self.tmp_lines.append(self._gen_line_with_args(self.v1, self.v2, color=color))
@@ -98,7 +100,9 @@ class Edge:
                 self.tmp_lines.append(self._gen_line_with_args(self.v2, self.v1, color=color))
             else:
                 raise ValueError('from_v must be an adjacent vertex.')
-            animation = ShowCreation(self.tmp_lines[-1])
+            animation = ShowCreation(self.tmp_lines[-1], **kwargs)
+            if class_mode:
+                raise NotImplementedError('Fix me')
 
         return animation
 
