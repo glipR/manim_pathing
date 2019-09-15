@@ -17,6 +17,20 @@ class VisualGraph:
 
     PROPOGATION_SPEED = 1
 
+    START_COLOR = GREEN
+    END_COLOR = RED
+
+    DISCOVER_COLOR = YELLOW
+    EXPAND_COLOR = ORANGE
+
+    EDGE_DISCOVERY = YELLOW
+    EDGE_SUCCESS = PURPLE
+    EDGE_FAILURE = 'previous'
+    EDGE_SUCCESS_FLASH = GREEN
+    EDGE_FAIL_FLASH = RED
+
+    CURRENT_VERTS = '#F4A460'
+
     def __init__(self, filename, scene: Scene, **kwargs):
         defaults = self.VERTEX_DEFAULTS
         defaults.update(kwargs)
@@ -105,12 +119,25 @@ class VisualGraph:
         return AnimationGroup(*(e.draw_weight(**kwargs) for e in self.all_edges))
 
     def destroy(self, anim_class=Uncreate, **kwargs) -> Animation:
-        anim1 = [anim_class(e.line_object, **kwargs) for e in self.all_edges]
-        anim2 = [anim_class(v, **kwargs) for v in self.all_vertices]
-        anim3 = [anim_class(v.text, **kwargs) for v in self.all_vertices]
-        anims = AnimationGroup(*anim1, *anim2, *anim3)
+        anim1 = [anim_class(e.line_obj, **kwargs) for e in self.all_edges]
+        anim2 = [anim_class(e.weight_text, **kwargs) for e in self.all_edges]
+        anim3 = [anim_class(v, **kwargs) for v in self.all_vertices]
+        anim4 = [anim_class(v.text, **kwargs) for v in self.all_vertices]
+        anims = AnimationGroup(*anim1, *anim2, *anim3, *anim4)
 
         return anims
+
+    def search_init(self, start, end):
+        self.iteration = 0
+        self.start = self[start]
+        self.end = self[end]
+
+        self.start.set_fill(self.START_COLOR)
+        self.end.set_fill(self.END_COLOR)
+        self.scene.play(
+            self.start.get_update_ring(),
+            self.end.get_update_ring(),
+        )
 
     # Computation helpers
     def neighbours(self, vertex: Union[Vertex, str], with_weights=False):
@@ -322,27 +349,28 @@ class TestScene(Scene):
         self.play(c.draw_edges())
         self.play(c.draw_edge_weights())
 
-        c['F'].set_fill(RED)
+        c.search_init('F', 'C')
+
         self.play(*c.propogate_color_change(
             c['F'], c.neighbours('F'), YELLOW,
             on_hit_color=GREEN,
             after_hit_color=PURPLE,
             at_once=False, push_to_iterable=True,
-        ), c['F'].get_update_ring())
+        ))
 
         c.clean_edges()
 
-        c['C'].set_fill(GREEN)
         self.play(*c.propogate_color_change(
             c['C'], c.neighbours('C'), YELLOW,
             on_hit_color=GREEN,
             after_hit_color=PURPLE,
             at_once=True, push_to_iterable=True,
-        ), c['C'].get_update_ring())
+        ))
 
         self.wait(0.2)
 
-        self.play(*(Uncreate(mobj) for mobj in self.mobjects))
+        c.clean_edges()
+        self.play(c.destroy())
 
         d = VisualGraph('small.graph', self)
         d.draw_vertices()
