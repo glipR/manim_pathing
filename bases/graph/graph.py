@@ -229,6 +229,9 @@ class VisualGraph:
         timing_animation = {}
         timing_animation[start] = None
         vertices = [start, ]
+
+        # Handle failures after to ensure no collisions can occur
+        failures = defaultdict(lambda: defaultdict(lambda: None))
         while vertices:
             for vertex in vertices:
                 success_anims = self.propogate_color_change(
@@ -267,20 +270,28 @@ class VisualGraph:
                         rate_func=linear,
                     )
                     for key in failure_anims:
-                        base_anims = animations.get(key, [])
-                        wait_for = timing_animation[vertex]
-                        print(key, 'waits for', wait_for)
-                        animations[key] = (
-                            base_anims + [
-                                after_animation_separate(anim, wait_for) if wait_for else anim
-                                for anim in failure_anims[key]
-                            ]
-                        )
+                        failures[vertex][key] = failure_anims[key]
             vertices = [
                 child
                 for vertex in vertices
                 for child in children[vertex]
             ]
+
+        for source in failures.keys():
+            for dest in failures.keys():
+                if failures[source][dest]:
+                    # Failures will go both ways. Which occurs first? Only use that one.
+                    source_time = timing_animation[source].get_run_time() if timing_animation[source] else 0
+                    dest_time = timing_animation[dest].get_run_time() if timing_animation[dest] else 0
+                    if source_time < dest_time or (source_time == dest_time and source.key < dest.key):  # Make sure we always pick 1.
+                        base_anims = animations.get(dest, [])
+                        wait_for = timing_animation[source]
+                        animations[dest] = (
+                            base_anims + [
+                                after_animation_separate(anim, wait_for) if wait_for else anim
+                                for anim in failures[source][dest]
+                            ]
+                        )
 
         if push_to_iterable:
             anims = [
