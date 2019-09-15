@@ -47,7 +47,7 @@ class Edge:
         ))
 
     def _gen_line_with_args(self, v1: Vertex, v2: Vertex, **kwargs) -> Line:
-        config = self.CONFIG
+        config = dict(**self.CONFIG)
         config.update(kwargs)
         return Line(
             Point(

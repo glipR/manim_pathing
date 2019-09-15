@@ -242,11 +242,11 @@ class VisualGraph:
                 )
                 for key in success_anims:
                     base_anims = animations.get(key, [])
-                    timing_anims = animations.get(predecessor_map[key], [])
+                    timing_anims = None if key == start else animations.get(predecessor_map[key], [])
                     animations[key] = (
                         base_anims + [
                             after_animation_separate(anim, timing_anims[0]) if timing_anims else anim
-                            for anim in new_animations[key]
+                            for anim in success_anims[key]
                         ]
                     )
                 if include_failing_edges:
@@ -265,7 +265,7 @@ class VisualGraph:
                     )
                     for key in failure_anims:
                         base_anims = animations.get(key, [])
-                        timing_anims = animations.get(predecessor_map[key], [])
+                        timing_anims = None if key == start else animations.get(predecessor_map[key], [])
                         animations[key] = (
                             base_anims + [
                                 after_animation_separate(anim, timing_anims[0]) if timing_anims else anim
@@ -308,23 +308,44 @@ class TestScene(Scene):
         self.play(c.draw_edge_weights())
 
         c['F'].set_fill(RED)
-        self.play(c['F'].get_update_ring())
         self.play(*c.propogate_color_change(
             c['F'], c.neighbours('F'), YELLOW,
             on_hit_color=GREEN,
             after_hit_color=PURPLE,
             at_once=False, push_to_iterable=True,
-        ))
+        ), c['F'].get_update_ring())
 
         c.clean_edges()
 
         c['C'].set_fill(GREEN)
-        self.play(c['C'].get_update_ring())
         self.play(*c.propogate_color_change(
             c['C'], c.neighbours('C'), YELLOW,
             on_hit_color=GREEN,
             after_hit_color=PURPLE,
             at_once=True, push_to_iterable=True,
-        ))
+        ), c['C'].get_update_ring())
 
         self.wait(0.2)
+
+        self.play(*(Uncreate(mobj) for mobj in self.mobjects))
+
+        d = VisualGraph('small.graph', self)
+        d.draw_vertices()
+        self.play(d.draw_edges())
+
+        predecessor_map = {}
+        predecessor_map[d['A']] = d['F']
+        predecessor_map[d['D']] = d['F']
+        predecessor_map[d['G']] = d['F']
+        predecessor_map[d['B']] = d['A']
+        predecessor_map[d['H']] = d['B']
+        predecessor_map[d['E']] = d['B']
+        predecessor_map[d['C']] = d['B']
+        predecessor_map[d['I']] = d['G']
+        predecessor_map[d['J']] = d['I']
+
+        self.play(*d.propogate_from_predecessor_map(
+            d['F'], predecessor_map, YELLOW,
+            on_hit_success=GREEN, on_hit_fail=RED, after_hit_success=PURPLE, after_hit_fail='previous',
+            vertex_color=ORANGE, at_once=False, include_failing_edges=True, push_to_iterable=True,
+        ))
