@@ -1,7 +1,7 @@
 import os
 import re
 from collections import defaultdict
-from typing import Dict, DefaultDict, Optional, Union, Tuple
+from typing import Dict, DefaultDict, Optional, Union, Tuple, List
 
 from big_ol_pile_of_manim_imports import *
 from manim_pathing.bases.graph.edge import Edge
@@ -25,7 +25,7 @@ class VisualGraph:
 
     EDGE_DISCOVERY = YELLOW
     EDGE_SUCCESS = PURPLE
-    EDGE_FAILURE = 'previous'
+    EDGE_FAIL = 'previous'
     EDGE_SUCCESS_FLASH = GREEN
     EDGE_FAIL_FLASH = RED
 
@@ -198,10 +198,11 @@ class VisualGraph:
             )]
             # next step occurs when the edge propogation hits end.
             next_step = []
-            next_step.append(after_animation_separate(
-                end.get_update_ring(color=end_color),
-                *extension_dict[end],
-            ))
+            if end_color:
+                next_step.append(after_animation_separate(
+                    end.get_update_ring(color=end_color),
+                    *extension_dict[end],
+                ))
             if end_color:
                 # Change end vertex color
                 next_step.append(after_animation_separate(
@@ -328,6 +329,18 @@ class VisualGraph:
             ]
             return anims
         return animations
+
+    def draw_path_propogation(
+        self, verts: List[Vertex], edge_color, on_hit=None, after_hit=None,
+        vertex_color=None, vertex_texts=None, push_to_iterable=False
+    ):
+        predecessor_map = {}
+        for vert1, vert2 in zip(verts[:-1], verts[1:]):
+            predecessor_map[vert2] = vert1
+        return self.propogate_from_predecessor_map(
+            verts[0], predecessor_map, edge_color, on_hit_success=on_hit, after_hit_success=after_hit, include_failing_edges=False,
+            vertex_color=vertex_color, vertex_texts=vertex_texts, push_to_iterable=push_to_iterable
+        )
 
     # Misc animation helpers
     def update_foreground(self):
