@@ -60,7 +60,7 @@ class VisualGraph:
         self.edges: DefaultDict[Vertex, DefaultDict[Vertex, Optional[Edge]]] = defaultdict(lambda: defaultdict(lambda: None))
 
         for vertex in vertex_info:
-            vobj = Vertex(*vertex, scene, **defaults)
+            vobj = Vertex(*vertex, **defaults)
             self.vertices[vobj.key] = vobj
         for args, kwargs in edge_info:
             args[0] = self[args[0]]
