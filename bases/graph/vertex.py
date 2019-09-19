@@ -1,3 +1,4 @@
+from __future__ import annotations
 from big_ol_pile_of_manim_imports import *
 from manim_pathing.helpers import *
 from typing import Optional
@@ -83,3 +84,11 @@ class Vertex(Circle):
             anim = AnimationGroup(anim, ShowCreation(self.text))
 
         return anim
+
+    def __lt__(self, other: Vertex):
+        assert hasattr(self, 'distance') and hasattr(other, 'distance'), f"Distance attribute not set for {self} or {other}."
+        return (self.distance < other.distance) or (self.distance == other.distance and self.key < other.key)
+
+    def __gt__(self, other: Vertex):
+        assert hasattr(self, 'distance') and hasattr(other, 'distance'), f"Distance attribute not set for {self} or {other}."
+        return (self.distance > other.distance) or (self.distance == other.distance and self.key > other.key)
