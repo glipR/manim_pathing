@@ -117,7 +117,7 @@ class BFSGraph(VisualGraph):
                 self.distances[end] = self.iteration
 
             if anim and vertex != self.start and not self.ANIMATE_EXPAND_WHILE_PROPOGATING:
-                    self.scene.play(ApplyMethod(vertex.set_fill, self.EXPAND_COLOR))
+                self.scene.play(ApplyMethod(vertex.set_fill, self.EXPAND_COLOR))
 
         self.expanding = new_expanding
         if anim and self.ANIMATE_DISCOVERY and self.ANIMATE_EXPAND_AT_ONCE:
