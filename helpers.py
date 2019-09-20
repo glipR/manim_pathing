@@ -125,3 +125,109 @@ def after_animation_from_succession(anim_class, anim_args, anim_kwargs, *previou
     })
 
     return anim_class(*anim_args, **anim_kwargs)
+
+def generate_hull_about_points(points):
+    assert len(points) >= 3, "Cannot generate hull around < 3 points."
+    left = (points[0], 0)
+    right = (points[0], 0)
+    down = (points[0], 0)
+    up = (points[0], 0)
+    for index, point in enumerate(points[1:], start=1):
+        if point[0] < left[0][0]:
+            left = (point, index)
+        if point[0] > right[0][0]:
+            right = (point, index)
+        if point[1] > up[0][1]:
+            up = (point, index)
+        if point[1] < down[0][1]:
+            down = (point, index)
+
+    start_point = left[0]
+    current_point = start_point
+    new_points = []
+    first = True
+    l, u, r, d = range(4)
+    current_mode = l
+    current_slope = INF
+
+    while first or (current_point != start_point).any():
+        first = False
+        if current_mode == l and (current_point == up[0]).all():
+            current_mode = u
+            # New slope we are trying to best is flat.
+            current_slope = 0
+        if current_mode == u and (current_point == right[0]).all():
+            current_mode = r
+            # New slope we are trying to best is down.
+            current_slope = INF
+        if current_mode == r and (current_point == down[0]).all():
+            current_mode = d
+            # New slope we are trying to best is down.
+            current_slope = 0
+        new_point = None
+        new_slope = None
+        current_diff = float('inf')
+        considering = []
+        for point in points:
+            if not np.any([(point1 == point).all() for point1 in new_points]):
+                if current_mode == l:
+                    # Only select points in quadrant 1.
+                    if point[0] > current_point[0] and point[1] > current_point[1]:
+                        considering.append(point)
+                elif current_mode == u:
+                    # Quadrant 4
+                    if point[0] > current_point[0] and point[1] < current_point[1]:
+                        considering.append(point)
+                elif current_mode == r:
+                    # Quadrant 3
+                    if point[0] < current_point[0] and point[1] < current_point[1]:
+                        considering.append(point)
+                elif current_mode == d:
+                    # Quadrant 2
+                    if point[0] < current_point[0] and point[1] > current_point[1]:
+                        considering.append(point)
+        for point in considering:
+            slope = (point[1] - current_point[1]) / (point[0] - current_point[0])
+            diff = np.abs(current_slope - slope)
+            if diff < current_diff:
+                current_diff = diff
+                new_point = point
+                new_slope = slope
+        current_point = new_point
+        current_slope = new_slope
+        new_points.append(current_point)
+
+    return new_points
+
+def buffer_polygon(points, BUFF_DIST=1.25, BUFF_SCALING=0.3):
+    poly_points = []
+    wrapped_points = [points[-1]] + points + [points[0]]
+    for point1, point2, point3 in zip(wrapped_points[:-2], wrapped_points[1:-1], wrapped_points[2:]):
+        vec1 = unit_vec(point2 - point1)
+        vec2 = unit_vec(point2 - point3)
+        combined = unit_vec(vec1 + vec2)
+        poly_points.append(
+            point2 +  # Actual point
+            combined * BUFF_DIST +  # Buffer out
+            combined * BUFF_DIST * BUFF_SCALING * np.dot(vec1, vec2)  # Move further for tighter angles.
+        )
+    return poly_points
+
+def generate_enclosure_on_points(points, **kwargs):
+    if len(points) == 1:
+        circle = Circle(radius = kwargs.get('BUFF_DIST', 1.25))
+        circle.move_to(points[0])
+        return circle
+    elif len(points) == 2:
+        vec = unit_vec(points[1] - points[0])
+        rot_90 = np.array([-vec[1], vec[0], 0]) * kwargs.get('BUFF_DIST', 1.25) / 2
+        return generate_enclosure_on_points(np.array([
+            points[0] + rot_90,
+            points[0] - rot_90,
+            points[1] + rot_90,
+            points[1] - rot_90,
+        ]), **kwargs)
+    poly = Polygon(*buffer_polygon(generate_hull_about_points(points), **kwargs))
+    poly.round_corners()
+    return poly
+
