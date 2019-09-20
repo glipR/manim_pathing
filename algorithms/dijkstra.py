@@ -115,7 +115,6 @@ class DijkstraGraph(VisualGraph):
                     new_enclosing = self.generate_enclosing_polygon(points)
                     new_enclosing.round_corners()
                     new_enclosing.set_stroke(color=BLUE, width=4 * DEFAULT_STROKE_WIDTH)
-                    new_enclosing.scale_about_point(1.5, new_enclosing.get_center())
                     combined_anims[pop_vertex].append(Transform(self.enclosing, new_enclosing))
 
             pop_vertex.set_fill(self.EXPAND_COLOR)
@@ -141,7 +140,7 @@ class DijkstraGraph(VisualGraph):
             self.clean_edges()
         pop_vertex.expanded = True
 
-    def generate_enclosing_polygon(self, points):
+    def generate_enclosing_polygon(self, points, BUFF_DIST=1):
         if len(points) == 1:
             # return a circle around the point.
             enclosing = Circle()
@@ -185,7 +184,6 @@ class DijkstraGraph(VisualGraph):
         l, u, r, d = range(4)
         current_mode = l
         current_slope = INF
-        print('running with', points)
         while first or (current_point != start_point).any():
             first = False
             if current_mode == l and (current_point == up[0]).all():
@@ -222,20 +220,27 @@ class DijkstraGraph(VisualGraph):
                         # Quadrant 2
                         if point[0] < current_point[0] and point[1] > current_point[1]:
                             considering.append(point)
-            print('considering', considering)
             for point in considering:
                 slope = (point[1] - current_point[1]) / (point[0] - current_point[0])
                 diff = np.abs(current_slope - slope)
-                print(point, 'has slope', slope)
                 if diff < current_diff:
                     current_diff = diff
                     new_point = point
                     new_slope = slope
-            print('picked', new_point, 'with slope', new_slope)
             current_point = new_point
             current_slope = new_slope
             new_points.append(current_point)
-        enclosing = Polygon(*new_points)
+
+        # Solve buffer problem.
+        poly_points = []
+        wrapped_points = [new_points[-1]] + new_points + [new_points[0]]
+        for point1, point2, point3 in zip(wrapped_points[:-2], wrapped_points[1:-1], wrapped_points[2:]):
+            vec1 = unit_vec(point2 - point1)
+            vec2 = unit_vec(point2 - point3)
+            combined = unit_vec(vec1 + vec2)
+            poly_points.append(point2 + combined * BUFF_DIST)
+
+        enclosing = Polygon(*poly_points)
         return enclosing
 
     def vert_path(self):
