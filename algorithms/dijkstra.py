@@ -1,4 +1,5 @@
 import heapq
+import numpy as np
 from collections import defaultdict
 
 from big_ol_pile_of_manim_imports import *
@@ -15,6 +16,7 @@ class DijkstraGraph(VisualGraph):
     ANIMATE_EXPAND_AT_ONCE = False
     ANIMATE_EXPANDED_AREA = True
     ANIMATE_CHANGE_DISTANCE_NOT_EXPANDED = True
+    ANIMATE_HIGHLIGHT_EXPANDED = True
 
     DEFAULT_DISTANCE_STRING = '$\\infty$'
 
@@ -90,7 +92,32 @@ class DijkstraGraph(VisualGraph):
                 )
                 for key in fail_anims:
                     combined_anims[key] = combined_anims.get(key, []) + fail_anims[key]
-            combined_anims[pop_vertex] = []
+            combined_anims[pop_vertex] = combined_anims.get(pop_vertex, [])
+            if self.ANIMATE_HIGHLIGHT_EXPANDED:
+                if pop_vertex == self.start:
+                    self.enclosing = Polygon(
+                        pop_vertex.get_center() + UP * 0.3,
+                        pop_vertex.get_center() + RIGHT * 0.3,
+                        pop_vertex.get_center() + DOWN * 0.3,
+                        pop_vertex.get_center() + LEFT * 0.3,
+                    )
+                    self.enclosing.round_corners()
+                    self.enclosing.set_stroke(color=BLUE, width=4 * DEFAULT_STROKE_WIDTH)
+                    self.enclosing.scale_about_point(1.8, self.enclosing.get_center())
+                    self.tn_text = TextMobject("$T_n$", color=BLUE)
+                    self.tn_text.next_to(self.start, LEFT)
+                    combined_anims[pop_vertex].extend([
+                        ShowCreation(self.enclosing),
+                        ShowCreation(self.tn_text),
+                    ])
+                else:
+                    points = np.array(list(map(lambda x: x.get_center(), [pop_vertex] + list(filter(lambda x: x.expanded, self.all_vertices)))))
+                    new_enclosing = self.generate_enclosing_polygon(points)
+                    new_enclosing.round_corners()
+                    new_enclosing.set_stroke(color=BLUE, width=4 * DEFAULT_STROKE_WIDTH)
+                    new_enclosing.scale_about_point(1.5, new_enclosing.get_center())
+                    combined_anims[pop_vertex].append(Transform(self.enclosing, new_enclosing))
+
             pop_vertex.set_fill(self.EXPAND_COLOR)
             combined_anims[pop_vertex].append(pop_vertex.get_update_ring())
             if self.ANIMATE_ANNOTATE_DISTANCE and self.ANIMATE_CHANGE_DISTANCE_NOT_EXPANDED:
@@ -113,6 +140,103 @@ class DijkstraGraph(VisualGraph):
                 end.set_fill(self.DISCOVER_COLOR)
             self.clean_edges()
         pop_vertex.expanded = True
+
+    def generate_enclosing_polygon(self, points):
+        if len(points) == 1:
+            # return a circle around the point.
+            enclosing = Circle()
+            enclosing.move_to(Point(*points))
+            return enclosing
+        if len(points) == 2:
+            diff = unit_vec([points[1][x] - points[0][x] for x in range(3)])
+            # rotate left 90
+            diff_r90 = np.array([
+                -diff[1],
+                diff[0],
+                0
+            ])
+            new_enclosing = Polygon(
+                diff_r90 + points[0],
+                -diff_r90 + points[0],
+                -diff_r90 + points[1],
+                diff_r90 + points[1],
+            )
+            return new_enclosing
+        # Start from the leftmost point. Then move to the next point with the least change in slope
+        # (Clockwise)
+        # This sucks on complexity but who cares.
+        left = (points[0], 0)
+        right = (points[0], 0)
+        down = (points[0], 0)
+        up = (points[0], 0)
+        for index, point in enumerate(points[1:], start=1):
+            if point[0] < left[0][0]:
+                left = (point, index)
+            if point[0] > right[0][0]:
+                right = (point, index)
+            if point[1] > up[0][1]:
+                up = (point, index)
+            if point[1] < down[0][1]:
+                down = (point, index)
+        start_point = left[0]
+        current_point = start_point
+        new_points = []
+        first = True
+        l, u, r, d = range(4)
+        current_mode = l
+        current_slope = INF
+        print('running with', points)
+        while first or (current_point != start_point).any():
+            first = False
+            if current_mode == l and (current_point == up[0]).all():
+                current_mode = u
+                # New slope we are trying to best is flat.
+                current_slope = 0
+            if current_mode == u and (current_point == right[0]).all():
+                current_mode = r
+                # New slope we are trying to best is down.
+                current_slope = INF
+            if current_mode == r and (current_point == down[0]).all():
+                current_mode = d
+                # New slope we are trying to best is down.
+                current_slope = 0
+            new_point = None
+            new_slope = None
+            current_diff = float('inf')
+            considering = []
+            for point in points:
+                if not np.any([(point1 == point).all() for point1 in new_points]):
+                    if current_mode == l:
+                        # Only select points in quadrant 1.
+                        if point[0] > current_point[0] and point[1] > current_point[1]:
+                            considering.append(point)
+                    elif current_mode == u:
+                        # Quadrant 4
+                        if point[0] > current_point[0] and point[1] < current_point[1]:
+                            considering.append(point)
+                    elif current_mode == r:
+                        # Quadrant 3
+                        if point[0] < current_point[0] and point[1] < current_point[1]:
+                            considering.append(point)
+                    elif current_mode == d:
+                        # Quadrant 2
+                        if point[0] < current_point[0] and point[1] > current_point[1]:
+                            considering.append(point)
+            print('considering', considering)
+            for point in considering:
+                slope = (point[1] - current_point[1]) / (point[0] - current_point[0])
+                diff = np.abs(current_slope - slope)
+                print(point, 'has slope', slope)
+                if diff < current_diff:
+                    current_diff = diff
+                    new_point = point
+                    new_slope = slope
+            print('picked', new_point, 'with slope', new_slope)
+            current_point = new_point
+            current_slope = new_slope
+            new_points.append(current_point)
+        enclosing = Polygon(*new_points)
+        return enclosing
 
     def vert_path(self):
         verts = [self.end]
