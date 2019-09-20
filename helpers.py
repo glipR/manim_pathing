@@ -126,7 +126,9 @@ def after_animation_from_succession(anim_class, anim_args, anim_kwargs, *previou
 
     return anim_class(*anim_args, **anim_kwargs)
 
-def generate_hull_about_points(points):
+# Generating polygons encasing points/sets.
+
+def generate_hull_about_points(points, **kwargs):
     assert len(points) >= 3, "Cannot generate hull around < 3 points."
     left = (points[0], 0)
     right = (points[0], 0)
@@ -199,13 +201,55 @@ def generate_hull_about_points(points):
 
     return new_points
 
-def buffer_polygon(points, BUFF_DIST=1.25, BUFF_SCALING=0.3):
+def generate_strict_enclosure_on_points(points, MAX_INNER_ANGLE=270, **kwargs):
+    # First get the average of the points for the most natural radial search
+    middle = np.array([
+        sum(point[x] for point in points)/len(points)
+        for x in range(3)
+    ])
+    # Order then radially (clockwise)
+    q1, q2, q3, q4 = ([], [], [], [])
+    for point in points:
+        grad = (point[1] - middle[1]) / (point[0] - middle[0])
+        if point[0] > middle[0] and point[1] > middle[1]:
+            q1.append((point, grad))
+        if point[0] < middle[0] and point[1] > middle[1]:
+            q2.append((point, grad))
+        if point[0] < middle[0] and point[1] < middle[1]:
+            q3.append((point, grad))
+        if point[0] > middle[0] and point[1] < middle[1]:
+            q4.append((point, grad))
+    q1.sort(key=lambda px: px[1])
+    q2.sort(key=lambda px: px[1])
+    q3.sort(key=lambda px: px[1])
+    q4.sort(key=lambda px: px[1])
+    # make clockwise
+    sorted_points = list(map(lambda px: px[0], q1 + q2 + q3 + q4))[::-1]
+    while True:
+        wrapped = [sorted_points[-1]] + sorted_points + [sorted_points[0]]
+        for index, (point1, point2, point3) in enumerate(zip(wrapped[:-2], wrapped[1:-1], wrapped[2:])):
+            vec1 = unit_vec(point2 - point1)
+            vec2 = unit_vec(point2 - point3)
+            # sin = determinate, cos = dotproduct
+            radians = np.arctan2(vec2[0]*vec1[1] - vec1[0]*vec2[1], np.dot(vec1, vec2))
+            if radians > MAX_INNER_ANGLE:
+                del sorted_points[index]
+                break
+        else:
+            break
+    return sorted_points
+
+def buffer_polygon(points, BUFF_DIST=1.25, BUFF_SCALING=0.3, **kwargs):
     poly_points = []
     wrapped_points = [points[-1]] + points + [points[0]]
     for point1, point2, point3 in zip(wrapped_points[:-2], wrapped_points[1:-1], wrapped_points[2:]):
         vec1 = unit_vec(point2 - point1)
         vec2 = unit_vec(point2 - point3)
         combined = unit_vec(vec1 + vec2)
+        sin = vec2[0]*vec1[1] - vec2[1]*vec1[0]
+        if sin > 0:
+            # Inward meeting, combined should exert.
+            combined *= -1
         poly_points.append(
             point2 +  # Actual point
             combined * BUFF_DIST +  # Buffer out
@@ -213,7 +257,7 @@ def buffer_polygon(points, BUFF_DIST=1.25, BUFF_SCALING=0.3):
         )
     return poly_points
 
-def generate_enclosure_on_points(points, **kwargs):
+def generate_enclosure_on_points(points, method='strict', **kwargs):
     if len(points) == 1:
         circle = Circle(radius = kwargs.get('BUFF_DIST', 1.25))
         circle.move_to(points[0])
@@ -226,8 +270,12 @@ def generate_enclosure_on_points(points, **kwargs):
             points[0] - rot_90,
             points[1] + rot_90,
             points[1] - rot_90,
-        ]), **kwargs)
-    poly = Polygon(*buffer_polygon(generate_hull_about_points(points), **kwargs))
-    poly.round_corners()
-    return poly
-
+        ]), method=method, **kwargs)
+    if method == 'strict':
+        poly = Polygon(*buffer_polygon(generate_strict_enclosure_on_points(points, **kwargs), **kwargs))
+        poly.round_corners()
+        return poly
+    elif method == 'convex':
+        poly = Polygon(*buffer_polygon(generate_hull_about_points(points, **kwargs), **kwargs))
+        poly.round_corners()
+        return poly
