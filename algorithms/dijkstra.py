@@ -140,7 +140,7 @@ class DijkstraGraph(VisualGraph):
             self.clean_edges()
         pop_vertex.expanded = True
 
-    def generate_enclosing_polygon(self, points, BUFF_DIST=1):
+    def generate_enclosing_polygon(self, points, BUFF_DIST=1.25, BUFF_SCALING=0.3):
         if len(points) == 1:
             # return a circle around the point.
             enclosing = Circle()
@@ -163,7 +163,8 @@ class DijkstraGraph(VisualGraph):
             return new_enclosing
         # Start from the leftmost point. Then move to the next point with the least change in slope
         # (Clockwise)
-        # This sucks on complexity but who cares.
+        # This is quadratic complexity but could probably use a nice data structure to at least get linearithmic.
+        # But who cares :)
         left = (points[0], 0)
         right = (points[0], 0)
         down = (points[0], 0)
@@ -238,7 +239,11 @@ class DijkstraGraph(VisualGraph):
             vec1 = unit_vec(point2 - point1)
             vec2 = unit_vec(point2 - point3)
             combined = unit_vec(vec1 + vec2)
-            poly_points.append(point2 + combined * BUFF_DIST)
+            poly_points.append(
+                point2 +  # Actual point
+                combined * BUFF_DIST +  # Buffer out
+                combined * BUFF_DIST * BUFF_SCALING * np.dot(vec1, vec2)  # Move further for tighter angles.
+            )
 
         enclosing = Polygon(*poly_points)
         return enclosing
